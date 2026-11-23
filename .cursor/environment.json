@@ -1,0 +1,5 @@
+{
+  "name": "jelly-oidc",
+  "install": "[ ! -d '/agent/repos/jelly-oidc' ] || cd '/agent/repos/jelly-oidc' || exit $?; command -v docker >/dev/null || sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io docker-compose-v2; command -v dotnet >/dev/null || curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0 --install-dir \"$HOME/.dotnet\" && ln -sf \"$HOME/.dotnet/dotnet\" /usr/local/bin/dotnet; export PATH=\"$HOME/.dotnet:$PATH\"; bash scripts/build-plugin.sh; sudo docker compose -f docker/docker-compose.yml pull",
+  "start": "[ ! -d '/agent/repos/jelly-oidc' ] || cd '/agent/repos/jelly-oidc' || exit $?; bash scripts/build-plugin.sh; sudo docker compose -f docker/docker-compose.yml up -d; for i in $(seq 1 90); do curl -fsS http://127.0.0.1:8096/health >/dev/null && break; sleep 2; done"
+}

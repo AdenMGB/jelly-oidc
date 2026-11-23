@@ -1,0 +1,20 @@
+# Host-network stack for VMs where bridge networking between containers is blocked.
+services:
+  dex:
+    image: ghcr.io/dexidp/dex:v2.41.1
+    network_mode: host
+    command: dex serve /etc/dex/config.yaml
+    volumes:
+      - ./dex/config.yaml:/etc/dex/config.yaml:ro
+
+  jellyfin:
+    image: jellyfin/jellyfin:10.11.5
+    network_mode: host
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - ../build/plugins/JellyOidc:/config/plugins/Jelly-OIDC
+
+volumes:
+  jellyfin-config:
+  jellyfin-cache:

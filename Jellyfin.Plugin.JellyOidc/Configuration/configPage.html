@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Jelly-OIDC</title>
+</head>
+<body>
+  <div id="JellyOidcConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select">
+    <div data-role="content">
+      <div class="content-primary">
+        <form id="JellyOidcConfigForm">
+          <div class="verticalSection verticalSection-extrabottompadding">
+            <div class="sectionTitleContainer">
+              <h2 class="sectionTitle">Identity provider</h2>
+            </div>
+            <label class="checkboxContainer">
+              <input type="checkbox" is="emby-checkbox" id="Enabled" />
+              <span>Enable Jelly-OIDC</span>
+            </label>
+            <div class="inputContainer">
+              <label for="DisplayName">Display name</label>
+              <input is="emby-input" type="text" id="DisplayName" />
+            </div>
+            <div class="inputContainer">
+              <label for="Authority">Authority / OIDC issuer URL</label>
+              <input is="emby-input" type="text" id="Authority" placeholder="https://authentik.example.com/application/o/jellyfin/" />
+            </div>
+            <div class="inputContainer">
+              <label for="ClientId">Client ID</label>
+              <input is="emby-input" type="text" id="ClientId" />
+            </div>
+            <div class="inputContainer">
+              <label for="ClientSecret">Client secret</label>
+              <input is="emby-input" type="password" id="ClientSecret" />
+            </div>
+            <div class="inputContainer">
+              <label for="Scopes">Scopes (comma-separated)</label>
+              <input is="emby-input" type="text" id="Scopes" />
+            </div>
+            <button is="emby-button" type="button" class="raised button-submit" id="TestDiscovery">
+              <span>Test connection</span>
+            </button>
+            <pre id="DiscoveryResult" style="white-space:pre-wrap;font-size:12px;"></pre>
+          </div>
+
+          <div class="verticalSection verticalSection-extrabottompadding">
+            <div class="sectionTitleContainer">
+              <h2 class="sectionTitle">Claims &amp; roles</h2>
+            </div>
+            <div class="inputContainer">
+              <label for="RoleClaim">Role claim</label>
+              <input is="emby-input" type="text" id="RoleClaim" />
+            </div>
+            <div class="inputContainer">
+              <label for="UsernameClaim">Username claim</label>
+              <input is="emby-input" type="text" id="UsernameClaim" />
+            </div>
+            <div class="inputContainer">
+              <label for="AllowedRoles">Allowed roles (comma-separated)</label>
+              <input is="emby-input" type="text" id="AllowedRoles" />
+            </div>
+            <div class="inputContainer">
+              <label for="AdminRoles">Admin roles (comma-separated)</label>
+              <input is="emby-input" type="text" id="AdminRoles" />
+            </div>
+            <label class="checkboxContainer">
+              <input type="checkbox" is="emby-checkbox" id="EnableAuthorization" />
+              <span>Require membership in an allowed role</span>
+            </label>
+          </div>
+
+          <div class="verticalSection verticalSection-extrabottompadding">
+            <div class="sectionTitleContainer">
+              <h2 class="sectionTitle">Login experience</h2>
+            </div>
+            <label class="checkboxContainer">
+              <input type="checkbox" is="emby-checkbox" id="ShowLoginButton" />
+              <span>Show SSO button on web login</span>
+            </label>
+            <label class="checkboxContainer">
+              <input type="checkbox" is="emby-checkbox" id="OidcOnly" />
+              <span>OIDC-only (hide password fields on web)</span>
+            </label>
+            <label class="checkboxContainer">
+              <input type="checkbox" is="emby-checkbox" id="AutoRedirectToOidc" />
+              <span>Auto-redirect to SSO when OIDC-only</span>
+            </label>
+            <div class="inputContainer">
+              <label for="ButtonLabel">SSO button label override (optional)</label>
+              <input is="emby-input" type="text" id="ButtonLabel" placeholder="Sign in with {provider}" />
+            </div>
+            <p class="fieldDescription">Leave empty to use <strong>Sign in with</strong> plus the display name above. Use <code>{provider}</code> in a custom label to insert the display name.</p>
+            <label class="checkboxContainer">
+              <input type="checkbox" is="emby-checkbox" id="LinkAccountsByEmail" />
+              <span>Link OIDC logins to existing Jellyfin users when the email matches the username</span>
+            </label>
+            <label class="checkboxContainer">
+              <input type="checkbox" is="emby-checkbox" id="AllowManualAccountLinking" />
+              <span>Show “Link existing Jellyfin account” on the login page</span>
+            </label>
+            <p class="fieldDescription">While signed in with a local password, open <code id="LinkUri"></code> to attach OIDC to your account.</p>
+            <p class="fieldDescription">Load login UI via <code>/JellyOidc/ui/login.js</code> (injected through login disclaimer or custom branding).</p>
+            <p class="fieldDescription">Redirect URI: <code id="RedirectUri"></code></p>
+            <p class="fieldDescription">Quick Connect URL: <code id="QcUri"></code></p>
+          </div>
+
+          <div>
+            <button is="emby-button" type="submit" class="raised button-submit block">
+              <span>Save</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script type="text/javascript">
+    var JellyOidcConfig = { pluginUniqueId: '6524d89d-6e89-4e98-b7df-fc3d1f824f18' };
+    function splitCsv(value) {
+      return (value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+    function joinCsv(arr) { return (arr || []).join(', '); }
+    document.querySelector('#JellyOidcConfigPage').addEventListener('pageshow', function () {
+      Dashboard.showLoadingMsg();
+      var base = ApiClient.serverAddress();
+      document.querySelector('#RedirectUri').textContent = base + '/JellyOidc/OIDC/Callback';
+      document.querySelector('#QcUri').textContent = base + '/JellyOidc/OIDC/QuickConnect';
+      document.querySelector('#LinkUri').textContent = base + '/JellyOidc/OIDC/Link/Start';
+      ApiClient.getPluginConfiguration(JellyOidcConfig.pluginUniqueId).then(function (config) {
+        document.querySelector('#Enabled').checked = config.Enabled;
+        document.querySelector('#DisplayName').value = config.DisplayName || '';
+        document.querySelector('#Authority').value = config.Authority || '';
+        document.querySelector('#ClientId').value = config.ClientId || '';
+        document.querySelector('#ClientSecret').value = config.ClientSecret || '';
+        document.querySelector('#Scopes').value = joinCsv(config.Scopes);
+        document.querySelector('#RoleClaim').value = config.RoleClaim || '';
+        document.querySelector('#UsernameClaim').value = config.UsernameClaim || '';
+        document.querySelector('#AllowedRoles').value = joinCsv(config.AllowedRoles);
+        document.querySelector('#AdminRoles').value = joinCsv(config.AdminRoles);
+        document.querySelector('#EnableAuthorization').checked = config.EnableAuthorization;
+        document.querySelector('#ShowLoginButton').checked = config.ShowLoginButton;
+        document.querySelector('#OidcOnly').checked = config.OidcOnly;
+        document.querySelector('#AutoRedirectToOidc').checked = config.AutoRedirectToOidc;
+        document.querySelector('#ButtonLabel').value = config.ButtonLabel || '';
+        document.querySelector('#LinkAccountsByEmail').checked = config.LinkAccountsByEmail !== false;
+        document.querySelector('#AllowManualAccountLinking').checked = config.AllowManualAccountLinking !== false;
+        Dashboard.hideLoadingMsg();
+      });
+    });
+    document.querySelector('#TestDiscovery').addEventListener('click', function () {
+      ApiClient.ajax({ url: ApiClient.getUrl('JellyOidc/Config/TestDiscovery'), type: 'GET' }).then(function (r) {
+        document.querySelector('#DiscoveryResult').textContent = JSON.stringify(r, null, 2);
+      }).catch(function (e) {
+        document.querySelector('#DiscoveryResult').textContent = String(e);
+      });
+    });
+    document.querySelector('#JellyOidcConfigForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      Dashboard.showLoadingMsg();
+      ApiClient.getPluginConfiguration(JellyOidcConfig.pluginUniqueId).then(function (config) {
+        config.Enabled = document.querySelector('#Enabled').checked;
+        config.DisplayName = document.querySelector('#DisplayName').value;
+        config.Authority = document.querySelector('#Authority').value;
+        config.ClientId = document.querySelector('#ClientId').value;
+        config.ClientSecret = document.querySelector('#ClientSecret').value;
+        config.Scopes = splitCsv(document.querySelector('#Scopes').value);
+        config.RoleClaim = document.querySelector('#RoleClaim').value;
+        config.UsernameClaim = document.querySelector('#UsernameClaim').value;
+        config.AllowedRoles = splitCsv(document.querySelector('#AllowedRoles').value);
+        config.AdminRoles = splitCsv(document.querySelector('#AdminRoles').value);
+        config.EnableAuthorization = document.querySelector('#EnableAuthorization').checked;
+        config.ShowLoginButton = document.querySelector('#ShowLoginButton').checked;
+        config.OidcOnly = document.querySelector('#OidcOnly').checked;
+        config.AutoRedirectToOidc = document.querySelector('#AutoRedirectToOidc').checked;
+        config.ButtonLabel = document.querySelector('#ButtonLabel').value;
+        config.LinkAccountsByEmail = document.querySelector('#LinkAccountsByEmail').checked;
+        config.AllowManualAccountLinking = document.querySelector('#AllowManualAccountLinking').checked;
+        return ApiClient.updatePluginConfiguration(JellyOidcConfig.pluginUniqueId, config);
+      }).then(function (result) {
+        Dashboard.processPluginConfigurationUpdateResult(result);
+        return ApiClient.ajax({ url: ApiClient.getUrl('JellyOidc/Config/ApplyLoginExperience'), type: 'POST' });
+      }).finally(Dashboard.hideLoadingMsg);
+      return false;
+    });
+  </script>
+</body>
+</html>
