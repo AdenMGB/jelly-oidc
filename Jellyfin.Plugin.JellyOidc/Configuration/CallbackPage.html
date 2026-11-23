@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Signing in to Jellyfin</title>
+  <style nonce="__CSP_NONCE__">
+    :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: var(--background, #101010); color: var(--text, #fff); }
+  .card { padding: 2rem; border-radius: 12px; background: var(--card, #1e1e1e); box-shadow: 0 8px 24px rgba(0,0,0,.35); max-width: 420px; text-align: center; }
+  .spinner { width: 2rem; height: 2rem; border: 3px solid rgba(255,255,255,.2); border-top-color: var(--accent, #00a4dc);
+    border-radius: 50%; animation: spin 1s linear infinite; margin: 1rem auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { color: #f56565; display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Completing sign-in</h1>
+    <div class="spinner" aria-hidden="true"></div>
+    <p id="status">Connecting to Jellyfin…</p>
+    <p class="error" id="error"></p>
+  </div>
+  <script type="application/json" id="jelly-oidc-data">__DATA_JSON__</script>
+  <script nonce="__CSP_NONCE__">
+    (async function () {
+      const data = JSON.parse(document.getElementById('jelly-oidc-data').textContent);
+      const status = document.getElementById('status');
+      const error = document.getElementById('error');
+      try {
+        let deviceId = localStorage.getItem(data.deviceIdKey);
+        if (!deviceId) {
+          deviceId = crypto.randomUUID();
+          localStorage.setItem(data.deviceIdKey, deviceId);
+        }
+        const res = await fetch('/JellyOidc/OIDC/Complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: data.token,
+            deviceId,
+            deviceName: navigator.userAgent.substring(0, 64),
+            appName: data.appName,
+            appVersion: data.appVersion
+          })
+        });
+        if (!res.ok) throw new Error('Server rejected login (' + res.status + ')');
+        const auth = await res.json();
+        const creds = {
+          Servers: [{
+            Id: auth.ServerId,
+            Name: auth.ServerName,
+            LocalAddress: window.location.origin,
+            ManualAddress: window.location.origin,
+            DateLastAccessed: Date.now(),
+            UserId: auth.User.Id,
+            AccessToken: auth.AccessToken
+          }]
+        };
+        localStorage.setItem(data.credentialsKey, JSON.stringify(creds));
+        status.textContent = 'Success! Redirecting…';
+        window.location.href = '/web/';
+      } catch (e) {
+        error.style.display = 'block';
+        error.textContent = e.message || String(e);
+        status.textContent = 'Sign-in failed';
+      }
+    })();
+  </script>
+</body>
+</html>

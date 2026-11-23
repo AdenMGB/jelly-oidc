@@ -1,0 +1,80 @@
+services:
+  postgresql:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+      POSTGRES_PASSWORD: authentik
+    volumes:
+      - authentik-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2024.10.4
+    command: server
+    volumes:
+      - ./authentik:/blueprints/custom:ro
+    environment:
+      AUTHENTIK_SECRET_KEY: changeme-changeme-changeme-changeme12
+      AUTHENTIK_BOOTSTRAP_PASSWORD: authentik-admin
+      AUTHENTIK_BOOTSTRAP_EMAIL: admin@example.com
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_REDIS__HOST: redis
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2024.10.4
+    command: worker
+    environment:
+      AUTHENTIK_SECRET_KEY: changeme-changeme-changeme-changeme12
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_REDIS__HOST: redis
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  jellyfin:
+    image: jellyfin/jellyfin:10.11.5
+    ports:
+      - "8096:8096"
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - ../build/plugins/JellyOidc:/config/plugins/Jelly-OIDC
+    environment:
+      JELLYFIN_PublishedServerUrl: http://127.0.0.1:8096
+    depends_on:
+      - authentik-server
+
+volumes:
+  authentik-db:
+  jellyfin-config:
+  jellyfin-cache:

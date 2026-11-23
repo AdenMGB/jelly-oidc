@@ -1,0 +1,20 @@
+[
+  {
+    "guid": "6524d89d-6e89-4e98-b7df-fc3d1f824f18",
+    "name": "Jelly-OIDC",
+    "overview": "OpenID Connect / SSO authentication for Jellyfin with Authentik-focused defaults.",
+    "description": "Authenticate Jellyfin users through any OIDC provider (Authentik, Keycloak, Azure AD, and more). Supports role-based access, OIDC-only web login, and Quick Connect for native clients.",
+    "owner": "AdenMGB",
+    "category": "Authentication",
+    "versions": [
+      {
+        "version": "0.1.0.0",
+        "changelog": "Initial release",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/AdenMGB/jelly-oidc",
+        "checksum": "PLACEHOLDER",
+        "timestamp": "2026-03-23T00:00:00Z"
+      }
+    ]
+  }
+]

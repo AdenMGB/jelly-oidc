@@ -1,0 +1,19 @@
+issuer: http://127.0.0.1:5556/dex
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+staticClients:
+  - id: jellyfin
+    secret: jellyfin-dev-secret
+    redirectURIs:
+      - http://127.0.0.1:8096/JellyOidc/OIDC/Callback
+    name: Jellyfin
+staticPasswords:
+  - email: oidc@example.com
+    hash: $2a$10$ICpmGoCHqhKt0l175edzhuBVogMk/Xu2vWD8ImMXBD1uY/ZMWflL2
+    username: oidcuser
+    userID: oidcuser
+enablePasswordDB: true
