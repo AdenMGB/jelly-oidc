@@ -1,4 +1,5 @@
 using System.Text;
+using Jellyfin.Plugin.JellyOidc.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,6 +18,7 @@ public class UiController : ControllerBase
     public IActionResult LoginScript()
     {
         var config = Plugin.Instance.Configuration;
+        var label = LoginUiHelper.GetSignInButtonLabel(config);
         var script = new StringBuilder();
         script.AppendLine("(function(){");
         script.AppendLine("if(!window) return;");
@@ -26,11 +28,22 @@ public class UiController : ControllerBase
             showButton = config.ShowLoginButton,
             oidcOnly = config.OidcOnly,
             autoRedirect = config.AutoRedirectToOidc,
-            label = config.ButtonLabel,
+            label,
+            displayName = config.DisplayName,
+            allowLinking = config.AllowManualAccountLinking,
             startUrl = "/JellyOidc/OIDC/Start",
+            linkUrl = "/JellyOidc/OIDC/Link/Start",
             qcUrl = "/JellyOidc/OIDC/QuickConnect"
         })).AppendLine(";");
         script.AppendLine("""
+function jellyOidcButton(text, url, extraClass){
+  var btn=document.createElement('button');
+  btn.type='button';
+  btn.className='emby-button raised block jelly-oidc-btn '+(extraClass||'');
+  btn.textContent=text;
+  btn.onclick=function(){ window.location.href=url; };
+  return btn;
+}
 function inject(){
   if(!cfg.enabled) return;
   var form=document.querySelector('form');
@@ -41,19 +54,17 @@ function inject(){
     if(cfg.autoRedirect){ window.location.href=cfg.startUrl; return; }
   }
   if(cfg.showButton){
-    var btn=document.createElement('button');
-    btn.type='button';
-    btn.className='raised block';
-    btn.textContent=cfg.label||'Sign in with SSO';
-    btn.style.marginTop='1em';
-    btn.onclick=function(){ window.location.href=cfg.startUrl; };
-    form.appendChild(btn);
+    var wrap=document.createElement('div');
+    wrap.className='jelly-oidc-sso';
+    wrap.appendChild(jellyOidcButton(cfg.label||('Sign in with '+(cfg.displayName||'SSO')), cfg.startUrl, 'jelly-oidc-primary'));
+    if(cfg.allowLinking){
+      wrap.appendChild(jellyOidcButton('Link existing Jellyfin account', cfg.linkUrl, 'jelly-oidc-link'));
+    }
+    form.appendChild(wrap);
     var qc=document.createElement('a');
     qc.href=cfg.qcUrl;
+    qc.className='jelly-oidc-qc';
     qc.textContent='Quick Connect (mobile/TV)';
-    qc.style.display='block';
-    qc.style.marginTop='0.5em';
-    qc.style.textAlign='center';
     form.appendChild(qc);
   }
 }
@@ -68,16 +79,15 @@ if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded'
     public IActionResult LoginCss()
     {
         var css = """
-.jelly-oidc-sso button.raised.block{width:100%;}
-.jelly-oidc-sso a{color:var(--accent, #00a4dc);}
+.jelly-oidc-sso{margin-top:1.25em;display:flex;flex-direction:column;gap:0.75em;width:100%;}
+.jelly-oidc-btn{width:100%;margin:0!important;font-size:105%;padding:0.65em 1em;border-radius:0.35em;transition:transform .2s ease,opacity .2s ease;}
+.jelly-oidc-primary{background:var(--accent, #00a4dc);color:#fff!important;border:0;}
+.jelly-oidc-primary:hover{transform:scale(1.02);opacity:0.95;}
+.jelly-oidc-link{background:transparent;color:var(--accent, #00a4dc)!important;border:1px solid var(--accent, #00a4dc);}
+.jelly-oidc-link:hover{transform:scale(1.01);opacity:0.9;}
+.jelly-oidc-qc{display:block;margin-top:0.75em;text-align:center;font-size:0.95em;color:inherit;opacity:0.85;}
+.jelly-oidc-disclaimer{font-weight:600;text-align:center;margin:0.5em 0;}
 """;
-        if (Plugin.Instance.Configuration.UseJellyfinThemeVars)
-        {
-            css += """
-button.raised.block{background:var(--accent, #00a4dc);color:#fff;border:0;}
-""";
-        }
-
         return Content(css, "text/css", Encoding.UTF8);
     }
 }

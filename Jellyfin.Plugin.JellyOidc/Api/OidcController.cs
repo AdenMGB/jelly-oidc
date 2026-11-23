@@ -6,6 +6,8 @@ using Jellyfin.Plugin.JellyOidc.Configuration;
 using Jellyfin.Plugin.JellyOidc.Helpers;
 using Jellyfin.Plugin.JellyOidc.Services;
 using MediaBrowser.Controller.Authentication;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.QuickConnect;
 using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Authorization;
@@ -29,6 +31,8 @@ public class OidcController : ControllerBase
 
     private readonly OidcStateStore _stateStore;
     private readonly UserProvisioner _userProvisioner;
+    private readonly IAuthorizationContext _authorizationContext;
+    private readonly IUserManager _userManager;
     private readonly ISessionManager _sessionManager;
     private readonly IQuickConnect _quickConnect;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -38,6 +42,8 @@ public class OidcController : ControllerBase
     public OidcController(
         OidcStateStore stateStore,
         UserProvisioner userProvisioner,
+        IAuthorizationContext authorizationContext,
+        IUserManager userManager,
         ISessionManager sessionManager,
         IQuickConnect quickConnect,
         IHttpClientFactory httpClientFactory,
@@ -46,6 +52,8 @@ public class OidcController : ControllerBase
     {
         _stateStore = stateStore;
         _userProvisioner = userProvisioner;
+        _authorizationContext = authorizationContext;
+        _userManager = userManager;
         _sessionManager = sessionManager;
         _quickConnect = quickConnect;
         _httpClientFactory = httpClientFactory;
@@ -60,6 +68,25 @@ public class OidcController : ControllerBase
     [HttpGet("QuickConnect")]
     [AllowAnonymous]
     public Task<IActionResult> QuickConnectStart() => BeginAuthorizeAsync(quickConnect: true);
+
+  [HttpGet("Link/Start")]
+  [AllowAnonymous]
+  public async Task<IActionResult> LinkStart()
+  {
+    var config = Plugin.Instance.Configuration;
+    if (!config.Enabled || !config.AllowManualAccountLinking)
+    {
+      return BadRequest("Account linking is disabled");
+    }
+
+    var auth = await _authorizationContext.GetAuthorizationInfo(Request).ConfigureAwait(false);
+    if (auth.IsAuthenticated && auth.UserId != Guid.Empty)
+    {
+      return await BeginAuthorizeAsync(quickConnect: false, linkTargetUserId: auth.UserId).ConfigureAwait(false);
+    }
+
+    return await BeginAuthorizeAsync(quickConnect: false, linkExistingOnly: true).ConfigureAwait(false);
+  }
 
     [HttpGet("Callback")]
     [AllowAnonymous]
@@ -107,12 +134,16 @@ public class OidcController : ControllerBase
 
         var displayName = claims.FirstOrDefault(c => c.Type == "name")?.Value ?? username;
         var subject = claims.FirstOrDefault(c => c.Type == "sub")?.Value ?? username;
+        var email = claims.FirstOrDefault(c => c.Type is "email" or "Email")?.Value?.Trim() ?? string.Empty;
 
         var sessionToken = _stateStore.StoreSession(new AuthorizedSession
         {
             Username = username,
             DisplayName = displayName,
             Subject = subject,
+            Email = email,
+            LinkTargetUserId = pending.LinkTargetUserId,
+            LinkExistingOnly = pending.LinkExistingOnly,
             Roles = roles,
             IsAdmin = isAdmin
         });
@@ -161,10 +192,12 @@ public class OidcController : ControllerBase
         try
         {
             var userId = await _userProvisioner.ProvisionAsync(session, config).ConfigureAwait(false);
+            var jellyfinUser = _userManager.GetUserById(userId)
+                ?? throw new InvalidOperationException("Provisioned user not found.");
             var authRequest = new AuthenticationRequest
             {
                 UserId = userId,
-                Username = session.Username,
+                Username = jellyfinUser.Username,
                 App = request.AppName ?? JellyfinWebAppName,
                 AppVersion = request.AppVersion ?? JellyfinWebAppVersion,
                 DeviceId = request.DeviceId ?? Guid.NewGuid().ToString("N"),
@@ -241,7 +274,10 @@ public class OidcController : ControllerBase
         return Ok(new { success = true });
     }
 
-    private async Task<IActionResult> BeginAuthorizeAsync(bool quickConnect)
+    private async Task<IActionResult> BeginAuthorizeAsync(
+        bool quickConnect,
+        Guid? linkTargetUserId = null,
+        bool linkExistingOnly = false)
     {
         var config = Plugin.Instance.Configuration;
         if (!config.Enabled)
@@ -257,7 +293,12 @@ public class OidcController : ControllerBase
         var client = CreateOidcClient(config);
         var authorizeState = await client.PrepareLoginAsync().ConfigureAwait(false);
         var stateKey = authorizeState.State;
-        _stateStore.StorePending(stateKey, new PendingLoginState(authorizeState, quickConnect));
+        var pending = new PendingLoginState(authorizeState, quickConnect)
+        {
+            LinkTargetUserId = linkTargetUserId,
+            LinkExistingOnly = linkExistingOnly
+        };
+        _stateStore.StorePending(stateKey, pending);
         return Redirect(authorizeState.StartUrl);
     }
 

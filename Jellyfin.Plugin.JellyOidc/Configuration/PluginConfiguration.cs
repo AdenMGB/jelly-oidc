@@ -44,7 +44,13 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public bool AutoRedirectToOidc { get; set; }
 
-    public string ButtonLabel { get; set; } = "Sign in with SSO";
+    public string ButtonLabel { get; set; } = string.Empty;
+
+    public bool LinkAccountsByEmail { get; set; } = true;
+
+    public bool AllowManualAccountLinking { get; set; } = true;
+
+    public OidcAccountLink[] AccountLinks { get; set; } = [];
 
     public bool UseJellyfinThemeVars { get; set; } = true;
 

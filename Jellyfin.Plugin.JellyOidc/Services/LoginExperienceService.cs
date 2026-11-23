@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.JellyOidc.Configuration;
+using Jellyfin.Plugin.JellyOidc.Helpers;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Model.Branding;
@@ -69,10 +70,10 @@ public sealed class LoginExperienceService : IHostedService
             return;
         }
 
-        var label = string.IsNullOrWhiteSpace(config.ButtonLabel) ? "Sign in with SSO" : config.ButtonLabel;
+        var label = LoginUiHelper.GetSignInButtonLabel(config);
         branding.LoginDisclaimer =
             "<!-- jelly-oidc -->"
-            + $"<p><a class=\"raised block\" href=\"/JellyOidc/OIDC/Start\">{label}</a></p>"
+            + $"<p class=\"jelly-oidc-disclaimer\">{label}</p>"
             + (config.OidcOnly
                 ? "<p><em>Password sign-in is hidden. Use SSO or keep a local admin for break-glass access.</em></p>"
                 : string.Empty);

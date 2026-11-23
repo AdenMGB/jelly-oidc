@@ -15,6 +15,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
         serviceCollection.AddSingleton<OidcStateStore>();
+        serviceCollection.AddSingleton<AccountLinkService>();
         serviceCollection.AddSingleton<UserProvisioner>();
         serviceCollection.AddHostedService<LoginExperienceService>();
     }

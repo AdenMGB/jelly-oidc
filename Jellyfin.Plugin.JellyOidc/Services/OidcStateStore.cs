@@ -114,6 +114,10 @@ public sealed class PendingLoginState
     public IReadOnlyList<string> Roles { get; set; } = Array.Empty<string>();
 
     public bool IsAdmin { get; set; }
+
+    public Guid? LinkTargetUserId { get; set; }
+
+    public bool LinkExistingOnly { get; set; }
 }
 
 /// <summary>
@@ -134,4 +138,10 @@ public sealed class AuthorizedSession
     public DateTimeOffset CreatedUtc { get; init; } = DateTimeOffset.UtcNow;
 
     public Guid? SyncedUserId { get; set; }
+
+    public string Email { get; set; } = string.Empty;
+
+    public Guid? LinkTargetUserId { get; set; }
+
+    public bool LinkExistingOnly { get; set; }
 }

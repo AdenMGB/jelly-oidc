@@ -15,11 +15,16 @@ namespace Jellyfin.Plugin.JellyOidc.Services;
 public sealed class UserProvisioner
 {
     private readonly IUserManager _userManager;
+    private readonly AccountLinkService _accountLinks;
     private readonly ILogger<UserProvisioner> _logger;
 
-    public UserProvisioner(IUserManager userManager, ILogger<UserProvisioner> logger)
+    public UserProvisioner(
+        IUserManager userManager,
+        AccountLinkService accountLinks,
+        ILogger<UserProvisioner> logger)
     {
         _userManager = userManager;
+        _accountLinks = accountLinks;
         _logger = logger;
     }
 
@@ -37,20 +42,31 @@ public sealed class UserProvisioner
             }
         }
 
-        User? user;
-        try
+        var existing = _accountLinks.ResolveExistingUser(session, config);
+        User? user = existing;
+
+        if (user == null && !session.LinkExistingOnly)
         {
-            user = _userManager.GetUserByName(session.Username);
-        }
-        catch
-        {
-            user = null;
+            try
+            {
+                user = _userManager.GetUserByName(session.Username);
+            }
+            catch
+            {
+                user = null;
+            }
         }
 
         var providerId = typeof(JellyOidcAuthenticationProvider).FullName!;
 
         if (user == null)
         {
+            if (session.LinkExistingOnly)
+            {
+                throw new InvalidOperationException(
+                    "No Jellyfin account matched this identity. Use the same email as your Jellyfin username, or sign in with your password and link from the dashboard.");
+            }
+
             if (!config.AutoCreateUsers)
             {
                 throw new InvalidOperationException("User does not exist and auto-create is disabled.");
@@ -60,15 +76,19 @@ public sealed class UserProvisioner
             user.AuthenticationProviderId = providerId;
             _logger.LogInformation("Created Jellyfin user {Username} via OIDC", session.Username);
         }
-        else if (config.UpdateUserOnLogin)
+        else
         {
-            if (!string.Equals(user.AuthenticationProviderId, providerId, StringComparison.OrdinalIgnoreCase)
+            _accountLinks.SaveLink(config, session.Subject, session.Email, user.Id);
+
+            if (config.UpdateUserOnLogin
+                && !string.Equals(user.AuthenticationProviderId, providerId, StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrEmpty(user.AuthenticationProviderId))
             {
-                _logger.LogWarning("User {Username} uses provider {Provider}, re-binding to Jelly-OIDC", session.Username, user.AuthenticationProviderId);
+                _logger.LogWarning("User {Username} uses provider {Provider}, re-binding to Jelly-OIDC", user.Username, user.AuthenticationProviderId);
             }
 
             user.AuthenticationProviderId = providerId;
+            _logger.LogInformation("Signed in Jellyfin user {Username} via OIDC (linked)", user.Username);
         }
 
         ApplyPolicy(user, session, config);
